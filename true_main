@@ -23,7 +23,7 @@ def filterContours(contours, hierarchy):
     toDelete = []
 
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
-        if hierarchy[0,i,3] != 0:
+        if hierarchy[0,i,3] == -1:
             toDelete.append(i)
             print(it,"Eliminado por jerarquía")
             it = it + 1
@@ -34,7 +34,7 @@ def filterContours(contours, hierarchy):
     i = 0
 
     for cnt in cont:
-        if len(cnt) < 15:
+        if len(cnt) < 50:
             toDelete.append(i)
             print(it, "Eliminado por longitud")
             it = it + 1
@@ -53,11 +53,11 @@ def show_img(img, mode=0, erode=2, dilate=2):
     elif mode==1:
         ret, th2 = cv.threshold(img,80,255,cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
-        th2 = cv.erode(th2, kernel, iterations=2)
-        th2 = cv.dilate(th2, kernel, iterations=2)
+        th2 = cv.erode(th2, kernel, iterations=erode)
+        th2 = cv.dilate(th2, kernel, iterations=dilate)
         cv.imshow("window",th2)
     elif mode==2:
-        ret, th2 = cv.threshold(img, 20, 255, cv.THRESH_BINARY)
+        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th2 = cv.erode(th2, kernel, iterations=erode)
         th2 = cv.dilate(th2, kernel, iterations=dilate)
@@ -89,8 +89,8 @@ for i in range(0,3):
     images = [(dicom.dcmread(img)).pixel_array for img in image_files]
     imageSets.append(images)
 
-for i in range(0,len(imageSets[1])-1):
-    show_img(imageSets[1][i],2)
+for i in range(0,len(imageSets[2])-1):
+    show_img(imageSets[2][i],2)
     #print(filenames[i].dtype)
 
 
