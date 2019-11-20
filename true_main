@@ -18,7 +18,7 @@ def getLongContours(contours):
     return longCont
 
 it = 0 # Variable global para el conteo de los bordes eliminados de todas las imagenes
-def filterContours(contours, hierarchy):
+def filterContoursLungs(contours, hierarchy):
     global it
     toDelete = []
 
@@ -44,34 +44,76 @@ def filterContours(contours, hierarchy):
 
     return cont
 
-def show_img(img, mode=0, erode=2, dilate=2):
+
+def filterContoursArtery(contours, hierarchy):
+    toDelete = []
+    for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
+        if hierarchy[0,i,3] == -1:
+            toDelete.append(i)
+            print("Eliminado por jerarquía")
+    cont = np.delete(contours, toDelete, axis=0)
+    toDelete = []
+    for cnt in cont:
+        if len(cnt) > 30:
+            toDelete.append(i)
+            print(it, "Eliminado por longitud")
+            it = it + 1
+        i = i + 1
+
+    cont = np.delete(cont, toDelete, axis=0)
+
+    return cont
+
+
+
+def show_img(img, mode=0, erode=0, dilate=0):
     img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
-    if mode==0:
-        #plt.matshow(img, cmap='gray')
-        #plt.show()
+    if mode==0: # Modo de solo muestra
         cv.imshow("window",img)
-    elif mode==1:
+    elif mode==1: # Modo de solo umbralizado
         ret, th2 = cv.threshold(img,80,255,cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th2 = cv.erode(th2, kernel, iterations=erode)
         th2 = cv.dilate(th2, kernel, iterations=dilate)
         cv.imshow("window",th2)
-    elif mode==2:
+    elif mode==2: # Modo de umbralizado + contornos
+        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
+        kernel = np.ones((5, 5), np.uint8)
+        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        conts = filterContoursLungs(contours, hierarchy)
+
+        cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
+
+        cv.drawContours(cv_img, conts, -1, (0, 255, 0), 2)
+        cv.imshow("window",cv_img)
+    elif mode==3: # Modo de umbralizado + contornos + erosión y dilatación
         ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th2 = cv.erode(th2, kernel, iterations=erode)
         th2 = cv.dilate(th2, kernel, iterations=dilate)
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-       # print(len(contours))
-       # print(hierarchy)
 
-        conts = filterContours(contours, hierarchy)
+        conts = filterContoursLungs(contours, hierarchy)
 
-        cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
 
         cv.drawContours(cv_img, conts, -1, (0, 255, 0), 2)
-     #   cv.circle(cv_image, (10,10), 10, (0, 255, 0), 4)
-        cv.imshow("window",cv_img)
+        cv.imshow("window", cv_img)
+    elif mode==4: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta
+        img_arteria = img[190:400, 175:325]
+        ret, th2 = cv.threshold(img_arteria, 5, 255, cv.THRESH_BINARY)
+        kernel = np.ones((5, 5), np.uint8)
+        th2 = cv.erode(th2, kernel, iterations=erode)
+        th2 = cv.dilate(th2, kernel, iterations=dilate)
+        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+        conts = filterContoursArtery(contours, hierarchy) # DEFINIR ESTA FUNCIÓN. PENDIENTE DE LA REDONDEZ
+
+        cv_img = cv.cvtColor(th2, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
+
+        cv.drawContours(cv_img, conts, -1, (0, 255, 0), 2)
+        cv.imshow("window", cv_img)
     cv.waitKey(0)
 
 
@@ -90,7 +132,7 @@ for i in range(0,3):
     imageSets.append(images)
 
 for i in range(0,len(imageSets[2])-1):
-    show_img(imageSets[2][i],2)
+    show_img(imageSets[2][i],4)
     #print(filenames[i].dtype)
 
 
