@@ -29,7 +29,7 @@ def filterContoursLungs(contours, hierarchy):
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-            print(it,"Eliminado por jerarquía")
+         #   print(it,"Eliminado por jerarquía")
             it = it + 1
 
     cont = np.delete(contours, toDelete, axis=0)
@@ -40,7 +40,7 @@ def filterContoursLungs(contours, hierarchy):
     for cnt in cont:
         if len(cnt) < 72:
             toDelete.append(i)
-            print(it, "Eliminado por longitud")
+         #   print(it, "Eliminado por longitud")
             it = it + 1
         i = i + 1
 
@@ -54,7 +54,7 @@ def filterContoursArtery(contours, hierarchy):
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-            print("Eliminado por jerarquía")
+        #    print("Eliminado por jerarquía")
     cont = np.delete(contours, toDelete, axis=0)
     toDelete = []
 
@@ -63,13 +63,13 @@ def filterContoursArtery(contours, hierarchy):
     for cnt in cont:
         if (len(cnt) > 65) or (len(cnt) < 20):
             toDelete.append(i)
-            print("Eliminado por longitud")
+           # print("Eliminado por longitud")
         else:
             circularity = (4 * math.pi * cv.contourArea(cnt))/(cv.arcLength(cnt, 1) * cv.arcLength(cnt, 1))
-            print("Circularity =",circularity) # Suele tener como 0.85 de circularity, pero a veces se queda en unos 0.75. Al principio incluso es 0.69~
+          #  print("Circularity =",circularity) # Suele tener como 0.85 de circularity, pero a veces se queda en unos 0.75. Al principio incluso es 0.69~
             if (circularity < 0.60):
                 toDelete.append(i)
-                print("Eliminado por circularidad")
+              #  print("Eliminado por circularidad")
         i = i + 1
     cont = np.delete(cont, toDelete, axis=0)
     return cont
@@ -81,7 +81,7 @@ def filterContoursBronq(contours, hierarchy):
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-            print(it,"Eliminado por jerarquía")
+          #  print(it,"Eliminado por jerarquía")
             it = it + 1
 
     cont = np.delete(contours, toDelete, axis=0)
@@ -249,6 +249,7 @@ PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 2/")
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
 imageSets = []
+half_image = 0
 
 for i in range(0,3):
     image_files = glob.glob(PATH[i]+"*.dcm")
@@ -256,16 +257,28 @@ for i in range(0,3):
     images = [(dicom.dcmread(img)).pixel_array for img in image_files]
     imageSets.append(images)
 
-X = []
-Y = []
-Z = []
+X1 = []
+Y1 = []
+Z1 = []
+
+X2 = []
+Y2 = []
+Z2 = []
+
 for i in range(0,len(imageSets[1])-1):
+    half_image = (imageSets[1][i].shape)[0] / 2
     conts_lung = show_img(imageSets[1][i],5)
     for lung in conts_lung:
         for point in lung:
-            X.append(point[0,0])
-            Y.append(point[0,1])
-            Z.append(i*0.5)
+            if (point[0,0] > half_image):
+                X1.append(point[0,0])
+                Y1.append(point[0,1])
+                Z1.append(i*0.5)
+            else:
+                X2.append(point[0, 0])
+                Y2.append(point[0, 1])
+                Z2.append(i * 0.5)
+
 
     # En lungs acabamos teniendo una matriz 3d
     # Tenemos varios pisos, siendo cada piso correspondiente a cada una de las imágenes tomadas
@@ -290,13 +303,17 @@ ax = plt.axes(projection="3d")
 
 #x = np.linspace(-6, 6, 30)
 #y = np.linspace(-6, 6, 30)
-X = np.array(X)
-Y = np.array(Y)
-Z = np.array(Z)
+X1 = np.array(X1)
+Y1 = np.array(Y1)
+Z1 = np.array(Z1)
+
+X2 = np.array(X2)
+Y2 = np.array(Y2)
+Z2 = np.array(Z2)
 
 
-
-ax.plot(X, Y, np.flip(Z))
+ax.plot(X1, Y1, np.flip(Z1))
+ax.plot(X2, Y2, np.flip(Z2))
 #Axes3D.scatter(X, Y, Z)
 #ax.set_xlabel('x')
 #ax.set_ylabel('y')
