@@ -6,7 +6,10 @@ from skimage.util import img_as_ubyte
 import matplotlib.pyplot as plt
 import os
 import math
-import imutils
+import matplotlib as mpl
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import axes3d
+
 
 
 def getLongContours(contours):
@@ -101,6 +104,7 @@ def filterContoursBronq(contours, hierarchy):
 
 def show_img(img, mode=0, erode=2, dilate=2):
     img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
+    conts_lung = np.empty([1,2])
     if mode==0: # Modo de solo muestra
         cv.imshow("window",img)
     elif mode==1: # Modo de solo umbralizado
@@ -114,11 +118,11 @@ def show_img(img, mode=0, erode=2, dilate=2):
         kernel = np.ones((5, 5), np.uint8)
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-        conts = filterContoursLungs(contours, hierarchy)
+        conts_lung = filterContoursLungs(contours, hierarchy)
 
         cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
 
-        cv.drawContours(cv_img, conts, -1, (0, 255, 0), 2)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
         cv.imshow("window",cv_img)
     elif mode==3: # Modo de umbralizado + contornos + erosión y dilatación
         ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
@@ -127,11 +131,11 @@ def show_img(img, mode=0, erode=2, dilate=2):
         th2 = cv.dilate(th2, kernel, iterations=dilate)
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-        conts = filterContoursLungs(contours, hierarchy)
+        conts_lung = filterContoursLungs(contours, hierarchy)
 
         cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
 
-        cv.drawContours(cv_img, conts, -1, (0, 255, 0), 2)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
         cv.imshow("window", cv_img)
     elif mode==4: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta
 
@@ -194,6 +198,12 @@ def show_img(img, mode=0, erode=2, dilate=2):
         skip = False
         th_bronq = img
 
+        # 3.2. Dibujar los demás contornos
+
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
+
+        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
 
 
         if (conts_lung.size > 0):
@@ -202,46 +212,34 @@ def show_img(img, mode=0, erode=2, dilate=2):
             maxTop = 9999999
             maxBot = 0
 
-            for c in conts_lung:
-                extLeft = tuple(c[c[:, :, 0].argmin()][0])[0]
-                extRight = tuple(c[c[:, :, 0].argmax()][0])[0]
-                extTop = tuple(c[c[:, :, 1].argmin()][0])[1]
-                extBot = tuple(c[c[:, :, 1].argmax()][0])[1]
+            for c in conts_lung: # Ordenar por tamaño y coger solo los dos primeros
+                maxIzq = tuple(c[c[:, :, 0].argmin()][0])[0]
+                maxDer = tuple(c[c[:, :, 0].argmax()][0])[0]
+                maxTop = tuple(c[c[:, :, 1].argmin()][0])[1]
+                maxBot = tuple(c[c[:, :, 1].argmax()][0])[1]
 
-                if extLeft < maxIzq: maxIzq = extLeft
-                if extRight > maxDer: maxDer = extRight
-                if extTop < maxTop: maxTop = extTop
-                if extBot > maxBot: maxBot = extBot
+             #   if extLeft < maxIzq: maxIzq = extLeft
+             #   if extRight > maxDer: maxDer = extRight
+             #   if extTop < maxTop: maxTop = extTop
+             #   if extBot > maxBot: maxBot = extBot
 
-
-
-            img_bronq = img[maxTop:maxBot, maxIzq:maxDer] #mas arriba, mas abajo, mas izq, mas der
+                img_bronq = img[maxTop:maxBot, maxIzq:maxDer] #mas arriba, mas abajo, mas izq, mas der
 
 
-            ret, th_bronq = cv.threshold(img_bronq, 15, 255, cv.THRESH_BINARY)
-            cv.fillPoly(th_lung, pts=conts_art,
+                ret, th_bronq = cv.threshold(img_bronq, 15, 255, cv.THRESH_BINARY)
+                cv.fillPoly(th_lung, pts=conts_art,
                         color=(255, 255, 255))  # Coloreamos de blanco lo que antes era la arteria
-            contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-            conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
-            conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
-        else:
-            skip = True;
+                contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+                conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
+                conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
+                cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # A veces no se ven bien. Normalizar luminosidad?
 
-
-        # Step 3. Dibujar los contornos
-
-
-        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
-
-
-
-
-        if (not skip):
-            cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1)
-        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
-        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
         cv.imshow("window", cv_img)
     cv.waitKey(0)
+    if (len(conts_lung) > 0):
+        print(conts_lung[0][0][0,0])
+    return conts_lung # conts_lung es un array de arrays, donde cada elemento es un array de un elemento que contiene un array de dos elementos
+                      # Para acceder a un punto en concreto habria que hacer conts_lung[0][0][0], o quizá conts_lung[0][0,0]
 
 
 
@@ -258,10 +256,57 @@ for i in range(0,3):
     images = [(dicom.dcmread(img)).pixel_array for img in image_files]
     imageSets.append(images)
 
+X = []
+Y = []
+Z = []
 for i in range(0,len(imageSets[1])-1):
-    show_img(imageSets[1][i],5)
+    conts_lung = show_img(imageSets[1][i],5)
+    for lung in conts_lung:
+        for point in lung:
+            X.append(point[0,0])
+            Y.append(point[0,1])
+            Z.append(i*0.5)
+
+    # En lungs acabamos teniendo una matriz 3d
+    # Tenemos varios pisos, siendo cada piso correspondiente a cada una de las imágenes tomadas
+    # En cada uno de los pisos hay UNO O MÁS CONTORNOS, dependiendo de cuántos pulmones se hayan detectado
+    # Hay que tener en cuenta esa posibilidad de que haya más de un contorno a la hora de dibujarlos
     #print(filenames[i].dtype)
 
+#fig = plt.figure()
+#ax = fig.gca(projection='3d')
+
+#for lvl in lungs:
+#    for cnt in lvl:
+#        for pt in cnt:
+            #ax.plot(pt[0,0],i*0.1,pt[0,1])
+ #           ax.plot(3,1,2)
+
+#ax.legend()
+#plt.show()
+
+fig = plt.figure()
+ax = plt.axes(projection="3d")
+
+#x = np.linspace(-6, 6, 30)
+#y = np.linspace(-6, 6, 30)
+X = np.asarray(X)
+Y = np.asarray(Y)
+Z = np.asarray(Z)
+
+X, Y = np.meshgrid(X, Y)
+Z = np.array([Z,Z]) # shape (2,21711) Hay que convertirlo al shape que hay abajo
+#prueba = np.zeros((len(X),len(Y))) # shape (21711, 21711)
+
+
+
+
+ax.plot_wireframe(X, Y, Z, color='green')
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+
+plt.show()
 
 #ds=dicom.dcmread(PATH+'000000.dcm')
 #dcm_sample=ds.pixel_array*128
