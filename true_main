@@ -249,13 +249,27 @@ PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 2/")
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
 imageSets = []
-half_image = 0
+
+imageSet = 0
 
 for i in range(0,3):
     image_files = glob.glob(PATH[i]+"*.dcm")
     image_files.sort()
     images = [(dicom.dcmread(img)).pixel_array for img in image_files]
     imageSets.append(images)
+
+maxGrey = 0
+minGrey = 9999999
+
+for i in range(0,len(imageSets[imageSet])): # Obtain the maximum value of grey
+    greyValue = mx = np.amax(imageSets[imageSet][i])
+    if (greyValue > maxGrey):
+        maxGrey = greyValue
+    elif (greyValue < minGrey):
+        minGrey = greyValue
+
+for i in range(0,len(imageSets[imageSet])):
+    imageSets[0][i] = imageSets[imageSet][i] * (np.amax(imageSets[0][i] - minGrey) / (maxGrey - minGrey))
 
 X1 = []
 Y1 = []
@@ -265,19 +279,21 @@ X2 = []
 Y2 = []
 Z2 = []
 
-for i in range(0,len(imageSets[1])-1):
-    half_image = (imageSets[1][i].shape)[0] / 2
-    conts_lung = show_img(imageSets[1][i],5)
+half_image = 0
+
+for i in range(0,len(imageSets[imageSet])): # Obtain contours and visualize images
+    half_image = (imageSets[imageSet][i].shape)[0] / 2
+    conts_lung = show_img(imageSets[imageSet][i],5)
     for lung in conts_lung:
         for point in lung:
             if (point[0,0] > half_image):
                 X1.append(point[0,0])
                 Y1.append(point[0,1])
-                Z1.append(i*0.5)
+                Z1.append((len(imageSets[1]) - i))
             else:
                 X2.append(point[0, 0])
                 Y2.append(point[0, 1])
-                Z2.append(i * 0.5)
+                Z2.append((len(imageSets[1]) - i))
 
 
     # En lungs acabamos teniendo una matriz 3d
@@ -301,8 +317,6 @@ for i in range(0,len(imageSets[1])-1):
 fig = plt.figure()
 ax = plt.axes(projection="3d")
 
-#x = np.linspace(-6, 6, 30)
-#y = np.linspace(-6, 6, 30)
 X1 = np.array(X1)
 Y1 = np.array(Y1)
 Z1 = np.array(Z1)
@@ -311,14 +325,23 @@ X2 = np.array(X2)
 Y2 = np.array(Y2)
 Z2 = np.array(Z2)
 
+N1 = 10
+N2 = 10
+N3 = 10
+ma = np.random.choice([0,1], size=(N1,N2,N3), p=[0.99, 0.01])
 
-ax.plot(X1, Y1, np.flip(Z1))
-ax.plot(X2, Y2, np.flip(Z2))
-#Axes3D.scatter(X, Y, Z)
-#ax.set_xlabel('x')
-#ax.set_ylabel('y')
-#ax.set_zlabel('z')
+print(ma.shape, ma)
 
+voxels = np.array([X1, Y1,Z1])
+print(voxels.shape, voxels.ndim)
+
+ax.voxels(voxels)
+#ax.plot(X1, Y1, Z1, "g,")
+#ax.plot(X2, Y2, Z2, "g,")
+ax.set_xlabel('x')
+ax.set_ylabel('y')
+ax.set_zlabel('z')
+ax.auto_scale_xyz([0, 512], [0, 512], [20, 67])
 plt.show()
 
 #ds=dicom.dcmread(PATH+'000000.dcm')
