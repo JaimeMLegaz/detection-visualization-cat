@@ -1,3 +1,4 @@
+import easygui as easygui
 import numpy as np
 import cv2 as cv
 import pydicom as dicom
@@ -38,7 +39,7 @@ def filterContoursLungs(contours, hierarchy):
     i = 0
 
     for cnt in cont:
-        if len(cnt) < 72:
+        if len(cnt) < 120:
             toDelete.append(i)
          #   print(it, "Eliminado por longitud")
             it = it + 1
@@ -85,25 +86,13 @@ def filterContoursBronq(contours, hierarchy):
             it = it + 1
 
     cont = np.delete(contours, toDelete, axis=0)
-    #toDelete = []
-
-    #i = 0
-
-    #for cnt in cont:
-    #    if len(cnt) < 50:
-    #        toDelete.append(i)
-    #        print(it, "Eliminado por longitud")
-    #        it = it + 1
-    #    i = i + 1
-
-   # cont = np.delete(cont, toDelete, axis=0)
-
     return cont
 
 
 
 def show_img(img, mode=0, erode=2, dilate=2):
-    img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
+    #img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
+
     conts_lung = np.empty([1,2])
     if mode==0: # Modo de solo muestra
         cv.imshow("window",img)
@@ -141,10 +130,10 @@ def show_img(img, mode=0, erode=2, dilate=2):
 
         # Step 1. Arteria
 
-        ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
+        ret, th_art = cv.threshold(img, 1, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th_art = cv.erode(th_art, kernel, iterations=erode)  # Erosion y dilatacion imagen arteria
-        th_art = cv.dilate(th_art, kernel, iterations=dilate)
+        th_art = cv.dilate(th_art, kernel, iterations=dilate-1)
         img_arteria = th_art[190:400, 175:325]
         contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
         conts_art = filterContoursArtery(contours_art, hierarchy_art)
@@ -163,7 +152,7 @@ def show_img(img, mode=0, erode=2, dilate=2):
         # Step 3. Dibujar los contornos
 
 
-        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th_x -> ver la umbralizada, img -> ver la original
 
         cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
@@ -172,14 +161,14 @@ def show_img(img, mode=0, erode=2, dilate=2):
 
         # Step 1. Arteria
 
-        ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
+        ret, th_art = cv.threshold(img, 1, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th_art = cv.erode(th_art, kernel, iterations=erode)  # Erosion y dilatacion imagen arteria
-        th_art = cv.dilate(th_art, kernel, iterations=dilate)
-        img_arteria = th_art[190:400, 175:325]
+        th_art = cv.dilate(th_art, kernel, iterations=dilate-1)
+        img_arteria = th_art[220:400, 175:325]
         contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
         conts_art = filterContoursArtery(contours_art, hierarchy_art)
-        conts_art = [cnt + (175, 190) for cnt in conts_art]  # Para compensar el slice anterior
+        conts_art = [cnt + (175, 220) for cnt in conts_art]  # Para compensar el slice anterior
         # Aquí ya hemos obtenido el contorno de la arteria
 
         # Step 2. Pulmones
@@ -233,68 +222,91 @@ def show_img(img, mode=0, erode=2, dilate=2):
                 conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
                 conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
                 cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # A veces no se ven bien. Normalizar luminosidad?
+                cv.imshow("bronq", th_bronq)
 
         cv.imshow("window", cv_img)
     cv.waitKey(0)
-    if (len(conts_lung) > 0):
-        print(conts_lung[0][0][0,0])
+  #  if (len(conts_lung) > 0):
+  #      print(conts_lung[0][0][0,0])
     return conts_lung # conts_lung es un array de arrays, donde cada elemento es un array de un elemento que contiene un array de dos elementos
                       # Para acceder a un punto en concreto habria que hacer conts_lung[0][0][0], o quizá conts_lung[0][0,0]
 
+################## VARIABLES INICIALES #######################
 
-
-PATH = []
+PATH = [] # Lista de los paths a los tres sets de imágenes
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 1/")
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 2/")
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
-imageSets = []
+imageSets = [] # Lista que contendrá los sets de imágenes
+imageSet = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos
+mode = 5
+# Modo en el que se trabajará, más info en la función shmow_images
 
-imageSet = 0
-
-for i in range(0,3):
+for i in range(0,3): # Introduce las imágenes de los Paths en la lista de imágenes
     image_files = glob.glob(PATH[i]+"*.dcm")
     image_files.sort()
     images = [(dicom.dcmread(img)).pixel_array for img in image_files]
     imageSets.append(images)
 
+################### NORMALIZACIÓN ######################
+
 maxGrey = 0
 minGrey = 9999999
 
-for i in range(0,len(imageSets[imageSet])): # Obtain the maximum value of grey
-    greyValue = mx = np.amax(imageSets[imageSet][i])
+for i in range(0,len(imageSets[imageSet])): # Obtain the maximum and minimum value of grey
+    greyValue = np.amax(imageSets[imageSet][i])
     if (greyValue > maxGrey):
         maxGrey = greyValue
-    elif (greyValue < minGrey):
+
+    greyValue = np.amin(imageSets[imageSet][i])
+
+    if (greyValue < minGrey):
         minGrey = greyValue
 
-for i in range(0,len(imageSets[imageSet])):
-    imageSets[0][i] = imageSets[imageSet][i] * (np.amax(imageSets[0][i] - minGrey) / (maxGrey - minGrey))
 
+factor= 255.0/(maxGrey - minGrey)
+for i in range(0,len(imageSets[imageSet])): # Intento de normalización
+   # imageSets[imageSet][i] = imageSets[imageSet][i] * (np.amax(imageSets[imageSet][i] - minGrey) / (maxGrey - minGrey))
+   imageSets[imageSet][i] = ((imageSets[imageSet][i] - minGrey) * factor).astype(np.uint8)
+
+   print(np.amax(imageSets[imageSet][i]- minGrey),np.amin(imageSets[imageSet][i]))
+
+################# FIN NORMALIZACIÓN #####################
+
+# Set 1 (Pulmón der)
 X1 = []
 Y1 = []
 Z1 = []
-
+# Set 2 (Pulmón izq)
 X2 = []
 Y2 = []
 Z2 = []
 
-half_image = 0
+half_image = 0 # Punto medio de la imagen
 
 for i in range(0,len(imageSets[imageSet])): # Obtain contours and visualize images
-    half_image = (imageSets[imageSet][i].shape)[0] / 2
-    conts_lung = show_img(imageSets[imageSet][i],5)
-    for lung in conts_lung:
-        for point in lung:
-            if (point[0,0] > half_image):
+    half_image = (imageSets[imageSet][i].shape)[0] / 2 # Determinamos el punto medio de la imagen
+    conts_lung = show_img(imageSets[imageSet][i],mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
+    for lung in conts_lung: # Por cada pulmón
+        for point in lung: # Por cada punto en el pulmón
+            if (point[0,0] > half_image): # Si el punto supera la mitad de la imagen, se lo asignamos al pulmón derecho
                 X1.append(point[0,0])
                 Y1.append(point[0,1])
                 Z1.append((len(imageSets[1]) - i))
-            else:
+            else: # Si no, al pulmón izquierdo
                 X2.append(point[0, 0])
                 Y2.append(point[0, 1])
                 Z2.append((len(imageSets[1]) - i))
 
+voxWidth = (imageSets[imageSet][i].shape)[0]
+voxHeight = (imageSets[imageSet][i].shape)[1]
+voxels = np.zeros(shape=(voxWidth,voxHeight,len(imageSets[imageSet]))) # Determinamos las dimensiones de la representación 3D
+
+for i in range(0, len(imageSets[imageSet])):  # Obtain contours and visualize images
+    for lung in conts_lung:
+        for point in lung:
+            voxels[point[0,0],point[0,1],i] = 1 # Establecemos los valores de la matriz de vóxeles
 
     # En lungs acabamos teniendo una matriz 3d
     # Tenemos varios pisos, siendo cada piso correspondiente a cada una de las imágenes tomadas
@@ -302,17 +314,6 @@ for i in range(0,len(imageSets[imageSet])): # Obtain contours and visualize imag
     # Hay que tener en cuenta esa posibilidad de que haya más de un contorno a la hora de dibujarlos
     #print(filenames[i].dtype)
 
-#fig = plt.figure()
-#ax = fig.gca(projection='3d')
-
-#for lvl in lungs:
-#    for cnt in lvl:
-#        for pt in cnt:
-            #ax.plot(pt[0,0],i*0.1,pt[0,1])
- #           ax.plot(3,1,2)
-
-#ax.legend()
-#plt.show()
 
 fig = plt.figure()
 ax = plt.axes(projection="3d")
@@ -325,26 +326,14 @@ X2 = np.array(X2)
 Y2 = np.array(Y2)
 Z2 = np.array(Z2)
 
-N1 = 10
-N2 = 10
-N3 = 10
-ma = np.random.choice([0,1], size=(N1,N2,N3), p=[0.99, 0.01])
 
-print(ma.shape, ma)
+#ax.voxels(voxels) # PARA REPRESENTAR VOXELS
 
-voxels = np.array([X1, Y1,Z1])
-print(voxels.shape, voxels.ndim)
-
-ax.voxels(voxels)
-#ax.plot(X1, Y1, Z1, "g,")
-#ax.plot(X2, Y2, Z2, "g,")
+ax.plot(X1, Y1, Z1 ) # PARA REPRESENTAR PUNTOS
+ax.plot(X2, Y2, Z2 ) # "g,"
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
-ax.auto_scale_xyz([0, 512], [0, 512], [20, 67])
+ax.auto_scale_xyz([0, 512], [0, 512], [20, 67]) # DESCOMENTAR EN CASO DE PUNTOS
 plt.show()
-
-#ds=dicom.dcmread(PATH+'000000.dcm')
-#dcm_sample=ds.pixel_array*128
-#cv.imshow('sample image dicom',dcm_sample)
 
