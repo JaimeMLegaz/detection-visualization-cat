@@ -94,6 +94,8 @@ def show_img(img, mode=0, erode=2, dilate=2):
     #img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
 
     conts_lung = np.empty([1,2])
+    conts_bronq = None
+
     if mode==0: # Modo de solo muestra
         cv.imshow("window",img)
     elif mode==1: # Modo de solo umbralizado
@@ -228,7 +230,7 @@ def show_img(img, mode=0, erode=2, dilate=2):
     cv.waitKey(0)
   #  if (len(conts_lung) > 0):
   #      print(conts_lung[0][0][0,0])
-    return conts_lung # conts_lung es un array de arrays, donde cada elemento es un array de un elemento que contiene un array de dos elementos
+    return conts_lung, conts_bronq # conts_lung es un array de arrays, donde cada elemento es un array de un elemento que contiene un array de dos elementos
                       # Para acceder a un punto en concreto habria que hacer conts_lung[0][0][0], o quizá conts_lung[0][0,0]
 
 ################## VARIABLES INICIALES #######################
@@ -272,7 +274,7 @@ for i in range(0,len(imageSets[imageSet])): # Intento de normalización
 
    print(np.amax(imageSets[imageSet][i]- minGrey),np.amin(imageSets[imageSet][i]))
 
-################# FIN NORMALIZACIÓN #####################
+################# OBTENCION CONTORNOS #####################
 
 # Set 1 (Pulmón der)
 X1 = []
@@ -282,31 +284,45 @@ Z1 = []
 X2 = []
 Y2 = []
 Z2 = []
+# Set 3 (Bronquios)
 
 half_image = 0 # Punto medio de la imagen
 
+
 for i in range(0,len(imageSets[imageSet])): # Obtain contours and visualize images
     half_image = (imageSets[imageSet][i].shape)[0] / 2 # Determinamos el punto medio de la imagen
-    conts_lung = show_img(imageSets[imageSet][i],mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
+    conts_lung, conts_bronq = show_img(imageSets[imageSet][i],mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
     for lung in conts_lung: # Por cada pulmón
         for point in lung: # Por cada punto en el pulmón
-            if (point[0,0] > half_image): # Si el punto supera la mitad de la imagen, se lo asignamos al pulmón derecho
+       #     if (point[0,0] > half_image): # Si el punto supera la mitad de la imagen, se lo asignamos al pulmón derecho
                 X1.append(point[0,0])
                 Y1.append(point[0,1])
                 Z1.append((len(imageSets[1]) - i))
-            else: # Si no, al pulmón izquierdo
-                X2.append(point[0, 0])
-                Y2.append(point[0, 1])
-                Z2.append((len(imageSets[1]) - i))
+       #     else: # Si no, al pulmón izquierdo
+       #         X2.append(point[0, 0])
+       #         Y2.append(point[0, 1])
+       #         Z2.append((len(imageSets[1]) - i))
+    if (conts_bronq is not None):
+        for bronq in conts_bronq:
+            for point in bronq:
+            #    if (point[0,0] > half_image): # Si el punto supera la mitad de la imagen, se lo asignamos al pulmón derecho
+                    X2.append(point[0,0])
+                    Y2.append(point[0,1])
+                    Z2.append((len(imageSets[1]) - i))
+        #    print("PUNTO",point)
+       #     else: # Si no, al pulmón izquierdo
+       #         X2.append(point[0, 0])
+       #         Y2.append(point[0, 1])
+       #         Z2.append((len(imageSets[1]) - i))
 
 voxWidth = (imageSets[imageSet][i].shape)[0]
 voxHeight = (imageSets[imageSet][i].shape)[1]
 voxels = np.zeros(shape=(voxWidth,voxHeight,len(imageSets[imageSet]))) # Determinamos las dimensiones de la representación 3D
 
-for i in range(0, len(imageSets[imageSet])):  # Obtain contours and visualize images
-    for lung in conts_lung:
-        for point in lung:
-            voxels[point[0,0],point[0,1],i] = 1 # Establecemos los valores de la matriz de vóxeles
+#for i in range(0, len(imageSets[imageSet])):  # Obtain contours and visualize images
+#    for lung in conts_lung:
+#        for point in lung:
+#            voxels[point[0,0],point[0,1],i] = 1 # Establecemos los valores de la matriz de vóxeles
 
     # En lungs acabamos teniendo una matriz 3d
     # Tenemos varios pisos, siendo cada piso correspondiente a cada una de las imágenes tomadas
@@ -314,7 +330,9 @@ for i in range(0, len(imageSets[imageSet])):  # Obtain contours and visualize im
     # Hay que tener en cuenta esa posibilidad de que haya más de un contorno a la hora de dibujarlos
     #print(filenames[i].dtype)
 
+######## VISUALIZATION #########
 
+## PULMONES
 fig = plt.figure()
 ax = plt.axes(projection="3d")
 
@@ -326,14 +344,16 @@ X2 = np.array(X2)
 Y2 = np.array(Y2)
 Z2 = np.array(Z2)
 
-
 #ax.voxels(voxels) # PARA REPRESENTAR VOXELS
+ax.plot(X1, Y1, Z1, "g,") # PARA REPRESENTAR PUNTOS
 
-ax.plot(X1, Y1, Z1 ) # PARA REPRESENTAR PUNTOS
-ax.plot(X2, Y2, Z2 ) # "g,"
+## BRONQUIOS
+ax.plot(X2, Y2, Z2, "b-") # "g,"
+
 ax.set_xlabel('x')
 ax.set_ylabel('y')
 ax.set_zlabel('z')
 ax.auto_scale_xyz([0, 512], [0, 512], [20, 67]) # DESCOMENTAR EN CASO DE PUNTOS
 plt.show()
 
+####### END VISUALIZATION #######
