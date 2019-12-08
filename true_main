@@ -12,26 +12,12 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d import axes3d
 
 
-
-def getLongContours(contours):
-    longCont = []
-
-    for cnt in contours:
-        if (len(cnt) > 1000):
-            longCont.append(cnt)
-
-    return longCont
-
-it = 0 # Variable global para el conteo de los bordes eliminados de todas las imagenes
-def filterContoursLungs(contours, hierarchy):
-    global it
+def filterContoursLungs(contours, hierarchy): # Recibe contornos, devuelve los que considera que pertenecen a los pulmones
     toDelete = []
 
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-         #   print(it,"Eliminado por jerarquía")
-            it = it + 1
 
     cont = np.delete(contours, toDelete, axis=0)
     toDelete = []
@@ -39,10 +25,8 @@ def filterContoursLungs(contours, hierarchy):
     i = 0
 
     for cnt in cont:
-        if len(cnt) < 120:
+        if len(cnt) < 120: # Eliminamos aquellos que consideremos que son demasiado pequeños para pertenecer a un pulmón
             toDelete.append(i)
-         #   print(it, "Eliminado por longitud")
-            it = it + 1
         i = i + 1
 
     cont = np.delete(cont, toDelete, axis=0)
@@ -50,40 +34,34 @@ def filterContoursLungs(contours, hierarchy):
     return cont
 
 
-def filterContoursArtery(contours, hierarchy):
+def filterContoursArtery(contours, hierarchy): # Recibe contornos, devuelve los que considera que pertenecen a la arteria
     toDelete = []
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-        #    print("Eliminado por jerarquía")
     cont = np.delete(contours, toDelete, axis=0)
     toDelete = []
 
     i=0
 
     for cnt in cont:
-        if (len(cnt) > 65) or (len(cnt) < 20):
+        if (len(cnt) > 65) or (len(cnt) < 20): # Filtramos teniendo en cuenta el tamaño que suele tener la arteria
             toDelete.append(i)
-           # print("Eliminado por longitud")
-        else:
+        else: # Filtramos por circularidad
             circularity = (4 * math.pi * cv.contourArea(cnt))/(cv.arcLength(cnt, 1) * cv.arcLength(cnt, 1))
-          #  print("Circularity =",circularity) # Suele tener como 0.85 de circularity, pero a veces se queda en unos 0.75. Al principio incluso es 0.69~
+           # La arteria suele tener como 0.85 de circularity, pero a veces se queda en unos 0.75. Al principio incluso es 0.65~
             if (circularity < 0.60):
                 toDelete.append(i)
-              #  print("Eliminado por circularidad")
         i = i + 1
     cont = np.delete(cont, toDelete, axis=0)
     return cont
 
-def filterContoursBronq(contours, hierarchy):
-    global it
+def filterContoursBronq(contours, hierarchy): # Filtramos los contornos, dejando los que creamos que pertenecen a los bronquios
     toDelete = []
 
     for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
         if hierarchy[0,i,3] == -1:
             toDelete.append(i)
-          #  print(it,"Eliminado por jerarquía")
-            it = it + 1
 
     cont = np.delete(contours, toDelete, axis=0)
     return cont
@@ -91,35 +69,26 @@ def filterContoursBronq(contours, hierarchy):
 
 
 def show_img(img, mode=0, erode=2, dilate=2):
-    #img = cv.normalize(img, None, 0, 255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8U)
 
-    conts_lung = np.empty([1,2])
+    conts_lung = np.empty([1,2]) # Inicializamos las matrices que contendrán los pulmones y/o los bronquios
     conts_bronq = None
 
-    if mode==0: # Modo de solo muestra
-        cv.imshow("window",img)
-    elif mode==1: # Modo de solo umbralizado
-        ret, th2 = cv.threshold(img,80,255,cv.THRESH_BINARY)
-        kernel = np.ones((5, 5), np.uint8)
-        th2 = cv.erode(th2, kernel, iterations=erode)
-        th2 = cv.dilate(th2, kernel, iterations=dilate)
-        cv.imshow("window",th2)
-    elif mode==2: # Modo de umbralizado + contornos
-        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
-        kernel = np.ones((5, 5), np.uint8)
-        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    if mode==0: # Modo de umbralizado + contornos
+        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY) # Umbralizado
+        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE) # Seleccion de contornos
 
-        conts_lung = filterContoursLungs(contours, hierarchy)
+        conts_lung = filterContoursLungs(contours, hierarchy) # Filtramos contornos pulmones
 
         cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
 
-        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2) # Dibujamos los contornos en la imagen original
         cv.imshow("window",cv_img)
-    elif mode==3: # Modo de umbralizado + contornos + erosión y dilatación
+
+    elif mode==1: # Modo de umbralizado + contornos + erosión y dilatación
         ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
-        kernel = np.ones((5, 5), np.uint8)
-        th2 = cv.erode(th2, kernel, iterations=erode)
-        th2 = cv.dilate(th2, kernel, iterations=dilate)
+        kernel = np.ones((5, 5), np.uint8) # Kernel para dilatación/erosión
+        th2 = cv.erode(th2, kernel, iterations=erode) # Erosión
+        th2 = cv.dilate(th2, kernel, iterations=dilate) # Dilatación
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
         conts_lung = filterContoursLungs(contours, hierarchy)
@@ -128,7 +97,8 @@ def show_img(img, mode=0, erode=2, dilate=2):
 
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
         cv.imshow("window", cv_img)
-    elif mode==4: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta
+
+    elif mode==2: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta
 
         # Step 1. Arteria
 
@@ -136,9 +106,9 @@ def show_img(img, mode=0, erode=2, dilate=2):
         kernel = np.ones((5, 5), np.uint8)
         th_art = cv.erode(th_art, kernel, iterations=erode)  # Erosion y dilatacion imagen arteria
         th_art = cv.dilate(th_art, kernel, iterations=dilate-1)
-        img_arteria = th_art[190:400, 175:325]
+        img_arteria = th_art[190:400, 175:325] # Cortamos una sección de la imagen, aquella donde aparece siempre la arteria aorta
         contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        conts_art = filterContoursArtery(contours_art, hierarchy_art)
+        conts_art = filterContoursArtery(contours_art, hierarchy_art) # Filtramos los contornos para quedarnos siempre con la arteria aorta
         conts_art = [cnt + (175, 190) for cnt in conts_art]  # Para compensar el slice anterior
         # Aquí ya hemos obtenido el contorno de la arteria
 
@@ -153,13 +123,13 @@ def show_img(img, mode=0, erode=2, dilate=2):
 
         # Step 3. Dibujar los contornos
 
-
         cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th_x -> ver la umbralizada, img -> ver la original
 
-        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
-        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
+        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2) # Contornos de arteria (rojo)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2) # Contornos de pulmones (azul)
         cv.imshow("window", cv_img)
-    elif mode==5: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta + detección de bronquios
+
+    elif mode==3: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta + detección de bronquios
 
         # Step 1. Arteria
 
@@ -184,37 +154,21 @@ def show_img(img, mode=0, erode=2, dilate=2):
 
         # Step 3. Bronquios
 
-        # 3.1. Obtener las coordenadas extremas de los pulmones
-
-        skip = False
-        th_bronq = img
-
-        # 3.2. Dibujar los demás contornos
-
+        # 3.1. Primero dibujamos lo que ya tenemos, porque queremos dibujar los bronquios poco a poco y que queden por encima
         cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
 
         cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
 
-
+        # 3.2. Encontrar los bronquios y dibujarlos
         if (conts_lung.size > 0):
-            maxIzq = 9999999
-            maxDer = 0
-            maxTop = 9999999
-            maxBot = 0
-
-            for c in conts_lung: # Ordenar por tamaño y coger solo los dos primeros
-                maxIzq = tuple(c[c[:, :, 0].argmin()][0])[0]
-                maxDer = tuple(c[c[:, :, 0].argmax()][0])[0]
+            for c in conts_lung: # Por cada pulmón
+                maxIzq = tuple(c[c[:, :, 0].argmin()][0])[0] # Obtenemos las coordenadas más extremas de ese pulmón
+                maxDer = tuple(c[c[:, :, 0].argmax()][0])[0] # Solo cogeremos contornos de bronquios que estén dentro
                 maxTop = tuple(c[c[:, :, 1].argmin()][0])[1]
                 maxBot = tuple(c[c[:, :, 1].argmax()][0])[1]
 
-             #   if extLeft < maxIzq: maxIzq = extLeft
-             #   if extRight > maxDer: maxDer = extRight
-             #   if extTop < maxTop: maxTop = extTop
-             #   if extBot > maxBot: maxBot = extBot
-
-                img_bronq = img[maxTop:maxBot, maxIzq:maxDer] #mas arriba, mas abajo, mas izq, mas der
+                img_bronq = img[maxTop:maxBot, maxIzq:maxDer] # Seleccionamos solo la imagen de dentro del pulmón
 
 
                 ret, th_bronq = cv.threshold(img_bronq, 15, 255, cv.THRESH_BINARY)
@@ -223,15 +177,11 @@ def show_img(img, mode=0, erode=2, dilate=2):
                 contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
                 conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
                 conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
-                cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # A veces no se ven bien. Normalizar luminosidad?
-                cv.imshow("bronq", th_bronq)
+                cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
 
         cv.imshow("window", cv_img)
     cv.waitKey(0)
-  #  if (len(conts_lung) > 0):
-  #      print(conts_lung[0][0][0,0])
-    return conts_lung, conts_bronq # conts_lung es un array de arrays, donde cada elemento es un array de un elemento que contiene un array de dos elementos
-                      # Para acceder a un punto en concreto habria que hacer conts_lung[0][0][0], o quizá conts_lung[0][0,0]
+    return conts_lung, conts_bronq
 
 ################## VARIABLES INICIALES #######################
 
@@ -242,8 +192,7 @@ PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
 imageSets = [] # Lista que contendrá los sets de imágenes
 imageSet = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos
-mode = 5
-# Modo en el que se trabajará, más info en la función shmow_images
+mode = int(easygui.buttonbox("Selecciona un modo:\n0: Umbralizado + contornos\n1: 0 + Erosión y dilatación\n2: 1 + Detección arteria\n3: 2 + Detección bronquios","Select mode set",("0","1","2","3"))) # Índice que determina con qué modo trabajaremos
 
 for i in range(0,3): # Introduce las imágenes de los Paths en la lista de imágenes
     image_files = glob.glob(PATH[i]+"*.dcm")
@@ -268,8 +217,7 @@ for i in range(0,len(imageSets[imageSet])): # Obtain the maximum and minimum val
 
 
 factor= 255.0/(maxGrey - minGrey)
-for i in range(0,len(imageSets[imageSet])): # Intento de normalización
-   # imageSets[imageSet][i] = imageSets[imageSet][i] * (np.amax(imageSets[imageSet][i] - minGrey) / (maxGrey - minGrey))
+for i in range(0,len(imageSets[imageSet])): # Normalización
    imageSets[imageSet][i] = ((imageSets[imageSet][i] - minGrey) * factor).astype(np.uint8)
 
    print(np.amax(imageSets[imageSet][i]- minGrey),np.amin(imageSets[imageSet][i]))
@@ -280,11 +228,11 @@ for i in range(0,len(imageSets[imageSet])): # Intento de normalización
 X1 = []
 Y1 = []
 Z1 = []
-# Set 2 (Pulmón izq)
+# Set 2 (Bronquios)
 X2 = []
 Y2 = []
 Z2 = []
-# Set 3 (Bronquios)
+
 
 half_image = 0 # Punto medio de la imagen
 
