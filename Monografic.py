@@ -3,13 +3,14 @@ import numpy as np
 import cv2 as cv
 import pydicom as dicom
 import glob
-from skimage.util import img_as_ubyte
 import matplotlib.pyplot as plt
+from skimage.util import img_as_ubyte
 import os
 import math
 import matplotlib as mpl
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d import axes3d
+
 
 #### FILTERING FUNCTIONS ####
 def filterContoursLungs(contours, hierarchy): # Recibe contornos, devuelve los que considera que pertenecen a los pulmones
@@ -299,35 +300,34 @@ PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 1/") # COMPRO
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 2/")
 PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
-imageSets = [] # Lista que contendrá los sets de imágenes
-imageSet = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos
+imageSet = [] # Lista que contendrá los sets de imágenes
+imageSetNumber = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos
 mode = int(easygui.buttonbox("Selecciona un modo:\n0: Umbralizado + contornos\n1: 0 + Erosión y dilatación\n2: 1 + Detección arteria\n3: 2 + Detección bronquios\n4: 3 + Umbralizado adaptativo de bronquios","Select mode set",("0","1","2","3","4"))) # Índice que determina con qué modo trabajaremos
 
-for i in range(0,3): # Introduce las imágenes de los Paths en la lista de imágenes
-    image_files = glob.glob(PATH[i]+"*.dcm")
-    image_files.sort()
-    images = [(dicom.dcmread(img)).pixel_array for img in image_files]
-    imageSets.append(images)
+
+image_files = glob.glob(PATH[imageSetNumber]+"*.dcm")
+image_files.sort()
+imageSet = [(dicom.dcmread(img)).pixel_array for img in image_files]
 
 ################### NORMALIZACIÓN ######################
 
 maxGrey = 0
 minGrey = 9999999 # Basta con ser mayor de 65536
 
-for i in range(0,len(imageSets[imageSet])): # Obtain the maximum and minimum value of grey
-    greyValue = np.amax(imageSets[imageSet][i])
+for i in range(0,len(imageSet)): # Obtain the maximum and minimum value of grey
+    greyValue = np.amax(imageSet[i])
     if (greyValue > maxGrey):
         maxGrey = greyValue
 
-    greyValue = np.amin(imageSets[imageSet][i])
+    greyValue = np.amin(imageSet[i])
 
     if (greyValue < minGrey):
         minGrey = greyValue
 
 
 factor= 255.0/(maxGrey - minGrey)
-for i in range(0,len(imageSets[imageSet])): # Normalización
-   imageSets[imageSet][i] = ((imageSets[imageSet][i] - minGrey) * factor).astype(np.uint8)
+for i in range(0,len(imageSet)): # Normalización
+   imageSet[i] = ((imageSet[i] - minGrey) * factor).astype(np.uint8)
 
   # print(np.amax(imageSets[imageSet][i]- minGrey),np.amin(imageSets[imageSet][i]))
 
@@ -350,28 +350,28 @@ Z3 = []
 
 
 
-last_img = np.zeros(imageSets[imageSet][0].shape)
+last_img = np.zeros(imageSet[0].shape)
 
-for i in range(0,len(imageSets[imageSet])): # Obtain contours and visualize images
-    conts_lung, conts_art, conts_bronq, next_img = show_img(imageSets[imageSet][i],last_img,mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
+for i in range(0,len(imageSet)): # Obtain contours and visualize images
+    conts_lung, conts_art, conts_bronq, next_img = show_img(imageSet[i],last_img,mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
     last_img = next_img
     for lung in conts_lung: # Por cada pulmón
         for point in lung: # Por cada punto en el pulmón
                 X1.append(point[0,0])
                 Y1.append(point[0,1])
-                Z1.append((len(imageSets[1]) - i))
+                Z1.append((len(imageSet) - i))
     if (conts_bronq is not None):
         for bronq in conts_bronq:
             for point in bronq:
                     X2.append(point[0,0])
                     Y2.append(point[0,1])
-                    Z2.append((len(imageSets[1]) - i))
-    if (conts_bronq is not None):  ## TE HAS QUEDAO AQUI
-        for bronq in conts_bronq:
-            for point in bronq:
+                    Z2.append((len(imageSet) - i))
+    if (conts_art is not None):
+        for art in conts_art:
+            for point in art:
                     X3.append(point[0,0])
                     Y3.append(point[0,1])
-                    Z3.append((len(imageSets[1]) - i))
+                    Z3.append((len(imageSet) - i))
 
 ######## VISUALIZATION #########
 
@@ -387,8 +387,13 @@ X2 = np.array(X2) # Bronquios
 Y2 = np.array(Y2)
 Z2 = np.array(Z2)
 
+X3 = np.array(X3) # Arteria
+Y3 = np.array(Y3)
+Z3 = np.array(Z3)
+
 #ax.voxels(voxels) # PARA REPRESENTAR VOXELS
 ax.plot(X1, Y1, Z1, "g,") # PARA REPRESENTAR PULMONES
+ax.plot(X3, Y3, Z3, "r,") # PARA REPRESENTAR PULMONES
 #ax.plot(X2, Y2, Z2, "b,") # PARA REPRESENTAR BRONQUIOS
 
 ax.set_xlabel('x')
