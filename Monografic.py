@@ -47,7 +47,7 @@ def filterContoursArtery(contours, hierarchy, last_img): # Recibe contornos, dev
         redondez = cv.contourArea(cnt) / (np.pi * radio ** 2)
       #  circularity = (4 * math.pi * cv.contourArea(cnt)) / (
       #              cv.arcLength(cnt, 1) * cv.arcLength(cnt, 1))  # Cambiar por nueva fórmula !!!
-        if (((cv.contourArea(cnt) < 800) and (cv.contourArea(cnt) > 100)) and (redondez > 0.8)) or (solape(cnt,last_img)): # REDUCIR LA FACILIDAD CON LA QUE SALEN MOTAS ROJAS DENTRO PULMONES
+        if (((cv.contourArea(cnt) < 1000) and (cv.contourArea(cnt) > 100)) and (redondez > 0.8)) or (solape(cnt,last_img)): # REDUCIR LA FACILIDAD CON LA QUE SALEN MOTAS ROJAS DENTRO PULMONES
             toReturn.append(cnt)
 
     return toReturn
@@ -82,6 +82,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
     next_img = np.zeros(img.shape)
 
     if mode==0: # Modo de umbralizado + contornos
+        #cv.imshow("pre_thresh",img)
         ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY) # Umbralizado
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE) # Seleccion de contornos
 
@@ -90,6 +91,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
 
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2) # Dibujamos los contornos en la imagen original
+       # cv.imshow("post_thresh", th2)
         cv.imshow("window",cv_img)
 
     elif mode==1: # Modo de umbralizado + contornos + erosión y dilatación
@@ -98,7 +100,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         th2 = cv.erode(th2, kernel, iterations=erode) # Erosión
         th2 = cv.dilate(th2, kernel, iterations=dilate) # Dilatación
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-
+        cv.imshow("original",img)
         conts_lung = filterContoursLungs(contours, hierarchy)
 
         cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
@@ -112,14 +114,15 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
 
         ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
-        th_art = cv.morphologyEx(th_art, cv.MORPH_OPEN, np.ones((5, 5), np.uint8))  # ELIMINAMOS RUIDO
+        th_art = cv.morphologyEx(th_art, cv.MORPH_CLOSE, np.ones((5, 5), np.uint8))  # ELIMINAMOS RUIDO
         img_arteria = th_art[190:400, 175:325] # Cortamos una sección de la imagen, aquella donde aparece siempre la arteria aorta
+        img_arteria = cv.erode(img_arteria, kernel)
         contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-    #    cv.cvtColor(img_arteria,cv.COLOR_GRAY2BGR)
+     #   cv.cvtColor(img_arteria,cv.COLOR_GRAY2BGR)
     #    cv.drawContours(img_arteria, contours_art, -1, (128,128,0), 2)
     #    cv.imshow("arteria",img_arteria)
-     #   cv.waitKey(0)
+    #    cv.waitKey(0)
 
         conts_art = [cnt + (175, 190) for cnt in contours_art]  # Para compensar el slice anterior
         conts_art = filterContoursArtery(conts_art, hierarchy_art, last_img) # Filtramos los contornos para quedarnos siempre con la arteria aorta
@@ -132,7 +135,13 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         # Step 2. Pulmones
 
         ret, th_lung = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
+
+        cv.imshow("preborrado_arteria",th_lung)
+
         cv.fillPoly(th_lung, pts = conts_art, color=(255,255,255)) # Coloreamos de blanco lo que antes era la arteria
+
+        cv.imshow("postborrado_arteria", th_lung)
+
         th_lung = cv.erode(th_lung, kernel, iterations=erode) # Erosion y dilatacion imagen pulmon
         th_lung = cv.dilate(th_lung, kernel, iterations=dilate)
         contours_lung, hierarchy_lung = cv.findContours(th_lung, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
@@ -186,6 +195,9 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         cv.drawContours(next_img, conts_art, -1, (255, 255, 255),-1)  # Añadimos la arteria actual a esta imagen, para en el siguiente paso tenerla en cuenta
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
 
+
+        count = 1 # Para dibujar la ventana de este pulmon
+
         # 3.2. Encontrar los bronquios y dibujarlos
         if (conts_lung.size > 0):
             for c in conts_lung: # Por cada pulmón
@@ -196,14 +208,16 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
 
                 img_bronq = img[maxTop:maxBot, maxIzq:maxDer] # Seleccionamos solo la imagen de dentro del pulmón
 
-
                 ret, th_bronq = cv.threshold(img_bronq, 12, 255, cv.THRESH_BINARY_INV)
-                cv.fillPoly(th_lung, pts=conts_art,
-                        color=(255, 255, 255))  # Coloreamos de blanco lo que antes era la arteria
+
+               # cv.imshow("wind" + str(count), th_bronq)
+
                 contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
                 conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
                 conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
                 cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
+
+                count = count + 1 # Para dibujar la ventana de este pulmon
 
         cv.imshow("window", cv_img)
 
@@ -250,7 +264,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         mascara = np.zeros((512, 512), np.uint8)
 
         cv.fillPoly(mascara, pts=conts_lung, color=(255, 255, 255))  # Coloreamos de blanco lo que corresponde al pulmón, formando la mascara
-     #   cv.imshow("mascara", mascara)
+        cv.imshow("mascara", mascara)
 
         norma_mascara = cv.norm(mascara, cv.NORM_L1)
         # 3.3. Obtener la norma de la imagen cubierta por la máscara
@@ -278,7 +292,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
                     img_bronq_0 = cv.add(img_bronq_0, (255 - mascara)) # Elimino de esa imagen lo que no corresponde a los pulmones
                                                                         # Dado que tenemos la mascara guardada, podemos hacerlo
 
-                  #  cv.imshow("result", img_bronq_0)
+                 #   cv.imshow("result", img_bronq_0)
                     img_bronq = img_bronq_0[maxTop:maxBot, maxIzq:maxDer] # Seleccionamos solo la imagen de dentro del pulmón
 
 
@@ -353,6 +367,7 @@ Z3 = []
 last_img = np.zeros(imageSet[0].shape)
 
 for i in range(0,len(imageSet)): # Obtain contours and visualize images
+    print(i)
     conts_lung, conts_art, conts_bronq, next_img = show_img(imageSet[i],last_img,mode) # Mostramos la imagen con los contornos señalados y obtenemos el contorno (Separar en dos funciones?)
     last_img = next_img
     for lung in conts_lung: # Por cada pulmón
@@ -392,9 +407,10 @@ Y3 = np.array(Y3)
 Z3 = np.array(Z3)
 
 #ax.voxels(voxels) # PARA REPRESENTAR VOXELS
+ax.plot(X2, Y2, Z2, "b,") # PARA REPRESENTAR BRONQUIOS
 ax.plot(X1, Y1, Z1, "g,") # PARA REPRESENTAR PULMONES
 ax.plot(X3, Y3, Z3, "r,") # PARA REPRESENTAR PULMONES
-#ax.plot(X2, Y2, Z2, "b,") # PARA REPRESENTAR BRONQUIOS
+
 
 ax.set_xlabel('x')
 ax.set_ylabel('y')
