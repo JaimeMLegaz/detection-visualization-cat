@@ -279,9 +279,9 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
 ################## VARIABLES INICIALES #######################
 
 PATH = [] # Lista de los paths a los tres sets de imágenes
-PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 1/") # COMPROBAR SI SE PUEDE HACER RUTA RELATIVA AL .PY !!!
-PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 2/")
-PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
+PATH.append("SIB Imagenes seleccionadas/Case 1/")
+PATH.append("SIB Imagenes seleccionadas/Case 2/")
+PATH.append("SIB Imagenes seleccionadas/Case 3/")
 
 imageSet = [] # Lista que contendrá los sets de imágenes
 imageSetNumber = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos

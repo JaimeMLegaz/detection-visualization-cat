@@ -12,6 +12,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d import axes3d
 
 
+# TODO: Hacer una primera pasada leyendo todos los contornos. Guardarlos en arteria / pulmon izq / pulmon der
+# En caso de que en img[i-1] e img[i + 1] se haya detectado un contorno que no esté en img[i], en img[i] se copia img[-1]
+
 def filterContoursLungs(contours, hierarchy): # Recibe contornos, devuelve los que considera que pertenecen a los pulmones
     toDelete = []
 
@@ -171,13 +174,84 @@ def show_img(img, mode=0, erode=2, dilate=2):
                 img_bronq = img[maxTop:maxBot, maxIzq:maxDer] # Seleccionamos solo la imagen de dentro del pulmón
 
 
-                ret, th_bronq = cv.threshold(img_bronq, 15, 255, cv.THRESH_BINARY)
+                ret, th_bronq = cv.threshold(img_bronq, 12, 255, cv.THRESH_BINARY)
                 cv.fillPoly(th_lung, pts=conts_art,
                         color=(255, 255, 255))  # Coloreamos de blanco lo que antes era la arteria
                 contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
                 conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
                 conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
                 cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
+
+        cv.imshow("window", cv_img)
+
+    elif mode==4: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta + detección de bronquios con umbralizado adaptativo
+
+        # Step 1. Arteria
+
+        ret, th_art = cv.threshold(img, 1, 255, cv.THRESH_BINARY)
+        kernel = np.ones((5, 5), np.uint8)
+        th_art = cv.erode(th_art, kernel, iterations=erode)  # Erosion y dilatacion imagen arteria
+        th_art = cv.dilate(th_art, kernel, iterations=dilate-1)
+        img_arteria = th_art[220:400, 175:325]
+        contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        conts_art = filterContoursArtery(contours_art, hierarchy_art)
+        conts_art = [cnt + (175, 220) for cnt in conts_art]  # Para compensar el slice anterior
+        # Aquí ya hemos obtenido el contorno de la arteria
+
+        # Step 2. Pulmones
+
+        ret, th_lung = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
+        cv.fillPoly(th_lung, pts = conts_art, color=(255,255,255)) # Coloreamos de blanco lo que antes era la arteria
+        th_lung = cv.erode(th_lung, kernel, iterations=erode) # Erosion y dilatacion imagen pulmon
+        th_lung = cv.dilate(th_lung, kernel, iterations=dilate)
+        contours_lung, hierarchy_lung = cv.findContours(th_lung, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        conts_lung = filterContoursLungs(contours_lung, hierarchy_lung)
+
+        # Step 3. Bronquios
+
+        # 3.1. Primero dibujamos lo que ya tenemos, porque queremos dibujar los bronquios poco a poco y que queden por encima
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
+
+        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
+
+        # 3.2. Obtener la máscara de los pulmones y su norma
+        mascara = np.zeros((512, 512, 1), np.uint8)
+
+        cv.fillPoly(mascara, pts=conts_lung, color=(255, 255, 255))  # Coloreamos de blanco lo que corresponde al pulmón, formando la mascara
+        cv.imshow("mascara", mascara)
+
+        norma_mascara = cv.norm(mascara, cv.NORM_L1)
+        # 3.3. Obtener la norma de la imagen cubierta por la máscara
+        norma_img = cv.norm(img, cv.NORM_L1, mascara)
+
+        # 3.4. Obtener el valor medio de gris del interior de los pulmones
+        print("norma_img",norma_img, "norma_mascara",norma_mascara)
+
+        if (norma_mascara > 0.0):
+            grey_lungs = float(norma_img) / (float(norma_mascara) / 255) # En grey_lungs tenemos el valor medio de gris
+
+
+
+            # 3.2. Encontrar los bronquios y dibujarlos
+            if (conts_lung.size > 0):
+                for c in conts_lung: # Por cada pulmón
+                    maxIzq = tuple(c[c[:, :, 0].argmin()][0])[0] # Obtenemos las coordenadas más extremas de ese pulmón
+                    maxDer = tuple(c[c[:, :, 0].argmax()][0])[0] # Solo cogeremos contornos de bronquios que estén dentro
+                    maxTop = tuple(c[c[:, :, 1].argmin()][0])[1]
+                    maxBot = tuple(c[c[:, :, 1].argmax()][0])[1]
+
+                    img_bronq = img[maxTop:maxBot, maxIzq:maxDer] # Seleccionamos solo la imagen de dentro del pulmón
+
+
+
+                    ret, th_bronq = cv.threshold(img_bronq, 12, 255, cv.THRESH_BINARY)
+                    cv.fillPoly(th_lung, pts=conts_art,
+                            color=(255, 255, 255))  # Coloreamos de blanco lo que antes era la arteria
+                    contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+                    conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
+                    conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
+                    cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
 
         cv.imshow("window", cv_img)
     cv.waitKey(0)
@@ -192,7 +266,7 @@ PATH.append("/home/jaime/Documents/SIB Imagenes seleccionadas/Case 3/")
 
 imageSets = [] # Lista que contendrá los sets de imágenes
 imageSet = int(easygui.buttonbox("Selecciona un set de imágenes:","Select image set",("0","1","2"))) # Índice que determina con qué set trabajaremos
-mode = int(easygui.buttonbox("Selecciona un modo:\n0: Umbralizado + contornos\n1: 0 + Erosión y dilatación\n2: 1 + Detección arteria\n3: 2 + Detección bronquios","Select mode set",("0","1","2","3"))) # Índice que determina con qué modo trabajaremos
+mode = int(easygui.buttonbox("Selecciona un modo:\n0: Umbralizado + contornos\n1: 0 + Erosión y dilatación\n2: 1 + Detección arteria\n3: 2 + Detección bronquios\n4: 3 + Umbralizado adaptativo de bronquios","Select mode set",("0","1","2","3","4"))) # Índice que determina con qué modo trabajaremos
 
 for i in range(0,3): # Introduce las imágenes de los Paths en la lista de imágenes
     image_files = glob.glob(PATH[i]+"*.dcm")
@@ -265,7 +339,7 @@ Z2 = np.array(Z2)
 
 #ax.voxels(voxels) # PARA REPRESENTAR VOXELS
 ax.plot(X1, Y1, Z1, "g,") # PARA REPRESENTAR PULMONES
-# ax.plot(X2, Y2, Z2, "b,") # PARA REPRESENTAR BRONQUIOS
+#ax.plot(X2, Y2, Z2, "b,") # PARA REPRESENTAR BRONQUIOS
 
 ax.set_xlabel('x')
 ax.set_ylabel('y')
