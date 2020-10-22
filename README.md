@@ -1,5 +1,5 @@
-# sib_assignment
+# Detection and visualization in tomography scans
 
-El script que contiene toda la funcionalidad es "Monographic.py". Una vez ejecutado, se pedirá en una ventana interactiva qué set de imágenes se quiere usar, y qué modo.
+The script that contains all functionality is "Monographic.py". Once executed, a prompt will ask for the images to use, and the mode. 
 
-La jerarquía de directorios debe dejarse tal cual está. Cualquier cambio podra provocar que la aplicación no funcione como debe.
+The files hierarchy has to be untouched in order to preserve the correct functionality of the application.
