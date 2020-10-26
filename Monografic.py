@@ -13,129 +13,133 @@ from mpl_toolkits.mplot3d import axes3d
 
 
 #### FILTERING FUNCTIONS ####
-def filterContoursLungs(contours, hierarchy): # Recibe contornos, devuelve los que considera que pertenecen a los pulmones
-    toDelete = []
+def filter_contours_lungs(contours, hierarchy):  # Receives contours and return those assigned to the lungs
+    to_delete = []
 
-    for i in range(0,len(hierarchy[0]),1): # Escogemos solo los bordes exteriores (sin contar el más exterior)
-        if hierarchy[0,i,3] == -1:
-            toDelete.append(i)
+    for i in range(0, len(hierarchy[0]),1):  # We choose the exterior contours (without the outmost one)
+        if hierarchy[0, i, 3] == -1:
+            to_delete.append(i)
 
     i = 0
 
     for cnt in contours:
-        if len(cnt) < 120: # Eliminamos aquellos que consideremos que son demasiado pequeños para pertenecer a un pulmón
-            toDelete.append(i)
+        if len(cnt) < 120: # We delete those contours too small to be a lung
+            to_delete.append(i)
         i = i + 1
 
-    cont = np.delete(contours, toDelete, axis=0)
+    cont = np.delete(contours, to_delete, axis=0)
 
     return cont
 
-def filterContoursArtery(contours, hierarchy, last_img): # Recibe contornos, devuelve los que considera que pertenecen a la arteria
-    toReturn = []
-    toDelete = []
-    for i in range(0, len(hierarchy[0]), 1):  # Escogemos solo los bordes exteriores (sin contar el más exterior)
+
+def filter_contours_artery(contours, hierarchy, last_img):  # Receives contours, returns associated with the artery
+    to_return = []
+    to_delete = []
+    for i in range(0, len(hierarchy[0]), 1):  # We chose the outer contours (without the outermost one)
         if hierarchy[0, i, 3] == -1:
-            toDelete.append(i)
-    cont = np.delete(contours, toDelete, axis=0)
+            to_delete.append(i)
+    cont = np.delete(contours, to_delete, axis=0)
 
-    for cnt in cont: # De entre los contornos interiores
-        centro, radio = cv.minEnclosingCircle(cnt)
-        redondez = cv.contourArea(cnt) / (np.pi * radio ** 2)
-        if (((cv.contourArea(cnt) < 1000) and (cv.contourArea(cnt) > 100)) and (redondez > 0.8)) or (solape(cnt,last_img)):
-            toReturn.append(cnt)
+    for cnt in cont: # Among the interior contours
+        center, radio = cv.minEnclosingCircle(cnt)
+        round = cv.contourArea(cnt) / (np.pi * radio ** 2)
+        if (((cv.contourArea(cnt) < 1000) and (cv.contourArea(cnt) > 100)) and (round > 0.8)) or (overlap(cnt, last_img)):
+            to_return.append(cnt)
 
-    return toReturn
+    return to_return
 
-def solape(cnt, last_img):
-    nueva = np.zeros(last_img.shape)
-    cv.drawContours(nueva, [cnt], 0, (255, 255, 255), -1)
-    nueva2 = nueva * last_img
 
-    return cv.norm(nueva2, cv.NORM_L1) > 0
+def overlap(cnt, last_img):  # TODO Esto qué hace?
+    new_img = np.zeros(last_img.shape)
+    cv.drawContours(new_img, [cnt], 0, (255, 255, 255), -1)
+    new_img2 = new_img * last_img
 
-def filterContoursBronq(contours, hierarchy): # Filtramos los contornos, dejando los que creamos que pertenecen a los bronquios
-    toReturn = []
+    return cv.norm(new_img2, cv.NORM_L1) > 0
+
+
+def filter_contours_bronchi(contours, hierarchy):  # Receives contours, returns those associated with the bronchi
+    to_return = []
 
     for cnt in contours:
-        if cv.contourArea(cnt) > 10: # Eliminamos aquellos que consideremos que son demasiado pequeños para pertenecer a un pulmón
-            toReturn.append(cnt)
+        if cv.contourArea(cnt) > 10: # We delete those contours that are too small to be a lung
+            to_return.append(cnt)
 
-    return toReturn
+    return to_return
+
 
 #### DETECTING FUNCTION ####
 
 def show_img(img, last_img, mode=0, erode=2, dilate=2):
 
-    conts_lung = np.empty([1,2]) # Inicializamos las matrices que contendrán los pulmones y/o los bronquios
-    conts_bronq = None # Contendrá los contornos de los bronquios
-    conts_art = None # Contendrá los contornos de la arteria aorta
-    next_img = np.zeros(img.shape) # Para la máscara del modo 4
+    conts_lung = np.empty([1,2])  # Initializes the matrices that will contain the lungs and/or bronchi
+    conts_bronq = None  # This will contain the contours of the bronchi
+    conts_art = None  # This will contain the contours of the artery
+    next_img = np.zeros(img.shape)  # This is for the mask of the "Mode 4"
 
-    if mode==0: # Modo de umbralizado + contornos
-        #cv.imshow("pre_thresh",img)
-        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY) # Umbralizado
-        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE) # Seleccion de contornos
+    if mode == 0:  # Thresholding + Contour detection
+        # cv.imshow("pre_thresh",img)
+        ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)  # Thresholding
+        contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)  # Contour selection
 
-        conts_lung = filterContoursLungs(contours, hierarchy) # Filtramos contornos pulmones
+        conts_lung = filter_contours_lungs(contours, hierarchy)  # We obtain the contours of the lungs
 
-        cv_img = cv.cvtColor(img,cv.COLOR_GRAY2BGR) # th2 -> ver la umbralizada, img -> ver la original
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> view the threshold image, img -> view the original img
 
-        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2) # Dibujamos los contornos en la imagen original
-       # cv.imshow("post_thresh", th2)
-        cv.imshow("window",cv_img)
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)  # We draw the contours over the original image
+        # cv.imshow("post_thresh", th2)
+        cv.imshow("window", cv_img)
 
-    elif mode==1: # Modo de umbralizado + contornos + erosión y dilatación
+    elif mode == 1:  # Thresholding + Contours detection + Erosion + Dilatation
         ret, th2 = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
-        kernel = np.ones((5, 5), np.uint8) # Kernel para dilatación/erosión
-        th2 = cv.erode(th2, kernel, iterations=erode) # Erosión
-        th2 = cv.dilate(th2, kernel, iterations=dilate) # Dilatación
+        kernel = np.ones((5, 5), np.uint8)  # Kernel for dilatation/erosion
+        th2 = cv.erode(th2, kernel, iterations=erode)  # Erosion
+        th2 = cv.dilate(th2, kernel, iterations=dilate)  # Dilatation
         contours, hierarchy = cv.findContours(th2, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        cv.imshow("original",img)
-        conts_lung = filterContoursLungs(contours, hierarchy)
+        cv.imshow("original", img)
+        conts_lung = filter_contours_lungs(contours, hierarchy)
 
-        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> ver la umbralizada, img -> ver la original
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> view the threshold image, img -> view the original img
 
         cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)
         cv.imshow("window", cv_img)
 
-    elif mode==2: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta
+    elif mode == 2:  # Thresholding + Contours detection + Erosion + Dilatation + Artery detection
 
-        # Step 1. Arteria
+        # Step 1. Artery
 
         ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
-        th_art = cv.morphologyEx(th_art, cv.MORPH_CLOSE, np.ones((5, 5), np.uint8))  # ELIMINAMOS RUIDO
-        img_arteria = th_art[190:400, 175:325] # Cortamos una sección de la imagen, aquella donde aparece siempre la arteria aorta
-        img_arteria = cv.erode(img_arteria, kernel) # Queremos que la mancha negra de la arteria sea un poco más grande, para detectarla y eliminarla totalmente
-        contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        th_art = cv.morphologyEx(th_art, cv.MORPH_CLOSE, np.ones((5, 5), np.uint8))  # Removal of noise
+        img_artery = th_art[190:400, 175:325]  # We trim the image to get the area where the artery tends to be
+        img_artery = cv.erode(img_artery, kernel)  # We want to expand the artery, in order to detect it better
+        contours_art, hierarchy_art = cv.findContours(img_artery, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
-        conts_art = [cnt + (175, 190) for cnt in contours_art]  # Para compensar el slice anterior
-        conts_art = filterContoursArtery(conts_art, hierarchy_art, last_img) # Filtramos los contornos para quedarnos siempre con la arteria aorta
-        # Aquí ya hemos obtenido el contorno de la arteria
+        conts_art = [cnt + (175, 190) for cnt in contours_art]  # To compensate the previous trim
+        conts_art = filter_contours_artery(conts_art, hierarchy_art, last_img)  # We get the artery contours
+        # At this point, we have successfully obtained the artery's contours
 
-        # Step 2. Pulmones
+        # Step 2. Lungs
 
         ret, th_lung = cv.threshold(img, 30, 255, cv.THRESH_BINARY)
 
-  #      cv.imshow("preborrado_arteria",th_lung)
+        # cv.imshow("preborrado_arteria",th_lung)
 
-        cv.fillPoly(th_lung, pts = conts_art, color=(255,255,255)) # Coloreamos de blanco lo que antes era la arteria
+        cv.fillPoly(th_lung, pts=conts_art, color=(255, 255, 255))  # We color in white what corresponds to the artery
 
-   #     cv.imshow("postborrado_arteria", th_lung)
+        # cv.imshow("postborrado_arteria", th_lung)
 
-        th_lung = cv.erode(th_lung, kernel, iterations=erode) # Erosion y dilatacion imagen pulmon
+        th_lung = cv.erode(th_lung, kernel, iterations=erode)  # Erosion and dilatation of the lungs
         th_lung = cv.dilate(th_lung, kernel, iterations=dilate)
         contours_lung, hierarchy_lung = cv.findContours(th_lung, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        conts_lung = filterContoursLungs(contours_lung, hierarchy_lung)
+        conts_lung = filter_contours_lungs(contours_lung, hierarchy_lung)
 
-        # Step 3. Dibujar los contornos
+        # Step 3. Draw the contours
 
-        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th_x -> ver la umbralizada, img -> ver la original
+        cv_img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)  # th2 -> view the threshold image, img -> view the original img
 
-        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2) # Contornos de arteria (rojo)
-        cv.drawContours(next_img,conts_art,-1,(255,255,255),-1) # Añadimos la arteria actual a esta imagen, para en el siguiente paso tenerla en cuenta
-        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2) # Contornos de pulmones (verde)
+        cv.drawContours(cv_img, conts_art, -1, (0, 0, 255), 2)  # Artery contours (red)
+        cv.drawContours(next_img, conts_art, -1, (255, 255, 255), -1)  # Añadimos la arteria actual a esta imagen, para en el siguiente paso tenerla en cuenta
+        cv.drawContours(cv_img, conts_lung, -1, (0, 255, 0), 2)  # Contornos de pulmones (verde)
         cv.imshow("window", cv_img)
 
     elif mode==3: # Modo de umbralizado + contornos + erosión y dilatación + detección de arteria aorta + detección de bronquios
@@ -145,13 +149,13 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th_art = cv.morphologyEx(th_art, cv.MORPH_OPEN, np.ones((5, 5), np.uint8))  # ELIMINAMOS RUIDO
-        img_arteria = th_art[190:400,
+        img_artery = th_art[190:400,
                       175:325]  # Cortamos una sección de la imagen, aquella donde aparece siempre la arteria aorta
-        contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours_art, hierarchy_art = cv.findContours(img_artery, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
         conts_art = [cnt + (175, 190) for cnt in contours_art]  # Para compensar el slice anterior
-        conts_art = filterContoursArtery(conts_art, hierarchy_art,
-                                         last_img)  # Filtramos los contornos para quedarnos siempre con la arteria aorta
+        conts_art = filter_contours_artery(conts_art, hierarchy_art,
+                                           last_img)  # Filtramos los contornos para quedarnos siempre con la arteria aorta
         # Aquí ya hemos obtenido el contorno de la arteria
 
         # Step 2. Pulmones
@@ -161,7 +165,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         th_lung = cv.erode(th_lung, kernel, iterations=erode)  # Erosion y dilatacion imagen pulmon
         th_lung = cv.dilate(th_lung, kernel, iterations=dilate)
         contours_lung, hierarchy_lung = cv.findContours(th_lung, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        conts_lung = filterContoursLungs(contours_lung, hierarchy_lung)
+        conts_lung = filter_contours_lungs(contours_lung, hierarchy_lung)
 
         # Step 3. Bronquios
 
@@ -190,7 +194,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
                # cv.imshow("wind" + str(count), th_bronq)
 
                 contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-                conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
+                conts_bronq = filter_contours_bronchi(contours_bronq, hierarchy_bronq)
                 conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
                 cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
 
@@ -205,13 +209,13 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         ret, th_art = cv.threshold(img, 5, 255, cv.THRESH_BINARY)
         kernel = np.ones((5, 5), np.uint8)
         th_art = cv.morphologyEx(th_art, cv.MORPH_OPEN, np.ones((5, 5), np.uint8))  # ELIMINAMOS RUIDO
-        img_arteria = th_art[190:400,
+        img_artery = th_art[190:400,
                       175:325]  # Cortamos una sección de la imagen, aquella donde aparece siempre la arteria aorta
-        contours_art, hierarchy_art = cv.findContours(img_arteria, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours_art, hierarchy_art = cv.findContours(img_artery, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
 
         conts_art = [cnt + (175, 190) for cnt in contours_art]  # Para compensar el slice anterior
-        conts_art = filterContoursArtery(conts_art, hierarchy_art,
-                                         last_img)  # Filtramos los contornos para quedarnos siempre con la arteria aorta
+        conts_art = filter_contours_artery(conts_art, hierarchy_art,
+                                           last_img)  # Filtramos los contornos para quedarnos siempre con la arteria aorta
         # Aquí ya hemos obtenido el contorno de la arteria
 
         # Step 2. Pulmones
@@ -221,7 +225,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
         th_lung = cv.erode(th_lung, kernel, iterations=erode) # Erosion y dilatacion imagen pulmon
         th_lung = cv.dilate(th_lung, kernel, iterations=dilate)
         contours_lung, hierarchy_lung = cv.findContours(th_lung, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-        conts_lung = filterContoursLungs(contours_lung, hierarchy_lung)
+        conts_lung = filter_contours_lungs(contours_lung, hierarchy_lung)
 
         # Step 3. Bronquios
 
@@ -268,7 +272,7 @@ def show_img(img, last_img, mode=0, erode=2, dilate=2):
                     ret, th_bronq = cv.threshold(img_bronq, grey_lungs * 1.5, 255, cv.THRESH_BINARY_INV) # Antes era 12
                    # cv.imshow("bronq", th_bronq)
                     contours_bronq, hierarchy_bronq = cv.findContours(th_bronq, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-                    conts_bronq = filterContoursBronq(contours_bronq, hierarchy_bronq)
+                    conts_bronq = filter_contours_bronchi(contours_bronq, hierarchy_bronq)
                     conts_bronq = [cnt + (maxIzq, maxTop) for cnt in conts_bronq]  # Para compensar el slice anterior
                     cv.drawContours(cv_img, conts_bronq, -1, (255, 0, 0), 1) # Dibujamos el contorno de los bronquios encontrados
 
